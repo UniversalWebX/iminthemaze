@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>jeff bezos mazes</title>
+    <style>
+        body { background: #1a1a1a; color: white; display: flex; flex-direction: column; align-items: center; }
+        canvas { border: 5px solid #333; box-shadow: 0 0 20px rgba(0,0,0,0.5); margin-top: 20px; }
+        .ui { margin: 10px; font-family: 'Courier New', monospace; }
+    </style>
+</head>
+<body>
+    <div class="ui">KEYS: <span id="keys">0</span> | PORTALS DISCOVERED: <span id="portals">0</span></div>
+    <canvas id="gameCanvas"></canvas>
+    
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
