@@ -2,17 +2,29 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>jeff bezos mazes</title>
+    <title>nah</title>
     <style>
-        body { background: #1a1a1a; color: white; display: flex; flex-direction: column; align-items: center; }
-        canvas { border: 5px solid #333; box-shadow: 0 0 20px rgba(0,0,0,0.5); margin-top: 20px; }
-        .ui { margin: 10px; font-family: 'Courier New', monospace; }
+        body { background: #121212; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; }
+        canvas { border: 3px solid #333; border-radius: 8px; box-shadow: 0 0 20px rgba(0,0,0,0.5); margin: 20px; cursor: crosshair; }
+        .controls { background: #1e1e1e; padding: 20px; border-radius: 10px; width: 600px; text-align: center; }
+        textarea { width: 100%; height: 60px; background: #2d2d2d; color: #00ffcc; border: 1px solid #444; border-radius: 5px; margin-top: 10px; font-family: monospace; resize: none; }
+        button { background: #007acc; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; margin-top: 10px; transition: 0.2s; }
+        button:hover { background: #005f99; }
+        .stats { margin-bottom: 10px; color: #888; }
     </style>
 </head>
 <body>
-    <div class="ui">KEYS: <span id="keys">0</span> | PORTALS DISCOVERED: <span id="portals">0</span></div>
-    <canvas id="gameCanvas"></canvas>
+    <h1>MAZE WORLD MULTIPLAYER</h1>
+    <div class="stats">KEYS: <span id="keys">None</span> | STATUS: <span id="status">Connecting...</span></div>
     
+    <canvas id="gameCanvas"></canvas>
+
+    <div class="controls">
+        <label>PASTE YOUR PYTHON CODE HERE:</label>
+        <textarea id="mazeInput" placeholder='{"0_0": {"type": "wall", ...}}'></textarea>
+        <button onclick="loadNewMaze()">LOAD & SYNC MAZE</button>
+    </div>
+
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script src="game.js"></script>
 </body>
