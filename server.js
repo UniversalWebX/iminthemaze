@@ -7,20 +7,18 @@ const io = new Server(server, { cors: { origin: "*" } });
 
 app.use(express.static(__dirname));
 
-let rooms = {}; // Structure: { roomName: { mapData: {}, players: {} } }
+let rooms = {}; 
 
 io.on('connection', (socket) => {
     let currentRoom = null;
 
-    // Send the list of active mazes to a new player
     socket.emit('roomList', Object.keys(rooms));
 
     socket.on('createRoom', (data) => {
         const { roomName, mapData } = data;
         if (!rooms[roomName]) {
             rooms[roomName] = { mapData: mapData, players: {} };
-            io.emit('roomList', Object.keys(rooms)); // Update everyone's list
-            console.log(`Room created: ${roomName}`);
+            io.emit('roomList', Object.keys(rooms));
         }
     });
 
@@ -29,13 +27,8 @@ io.on('connection', (socket) => {
             if (currentRoom) socket.leave(currentRoom);
             socket.join(roomName);
             currentRoom = roomName;
-            
-            // Add player to room
             rooms[roomName].players[socket.id] = { x: 0, y: 0, color: '#00ffcc' };
-            
-            // Send the map data only to the player joining
             socket.emit('mapUpdate', rooms[roomName].mapData);
-            console.log(`${socket.id} joined ${roomName}`);
         }
     });
 
@@ -49,12 +42,9 @@ io.on('connection', (socket) => {
     socket.on('disconnect', () => {
         if (currentRoom && rooms[currentRoom]) {
             delete rooms[currentRoom].players[socket.id];
-            
-            // Check if room is empty
             if (Object.keys(rooms[currentRoom].players).length === 0) {
                 delete rooms[currentRoom];
-                io.emit('roomList', Object.keys(rooms)); // Update list for everyone
-                console.log(`Room closed: ${currentRoom}`);
+                io.emit('roomList', Object.keys(rooms));
             } else {
                 io.to(currentRoom).emit('state', rooms[currentRoom].players);
             }
