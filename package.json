@@ -1,7 +1,7 @@
 {
-  "name": "multiplayer-maze",
+  "name": "multiplayer-maze-adaptive",
   "version": "1.0.0",
-  "description": "Multiplayer Maze Game",
+  "description": "Adaptive Multiplayer Maze with Server List",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
