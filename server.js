@@ -8,14 +8,19 @@ app.use(express.static(__dirname));
 let rooms = {};
 
 io.on('connection', (socket) => {
+    // Send existing rooms to the user upon connection
     socket.emit('roomList', Object.keys(rooms));
 
     socket.on('createRoom', (data) => {
         const { roomName, mapData } = data;
+        if (!roomName) return;
+
         rooms[roomName] = {
             mapData: mapData,
-            players: { "dummy": { x: 0, y: 0, username: "SERVER", color: "#333" } }
+            players: {}
         };
+        console.log(`Room Created: ${roomName}`);
+        // Broadcast updated room list to all connected clients
         io.emit('roomList', Object.keys(rooms));
     });
 
@@ -23,8 +28,13 @@ io.on('connection', (socket) => {
         const { roomName, username, color } = data;
         if (rooms[roomName]) {
             socket.join(roomName);
-            if (rooms[roomName].players["dummy"]) delete rooms[roomName].players["dummy"];
-            rooms[roomName].players[socket.id] = { x: 0, y: 0, username, color };
+            rooms[roomName].players[socket.id] = { 
+                x: 0, y: 0, 
+                username: username || "Player", 
+                color: color || "#00ffcc",
+                inventory: []
+            };
+
             socket.emit('mapUpdate', rooms[roomName].mapData);
             io.to(roomName).emit('state', rooms[roomName].players);
         }
@@ -53,4 +63,8 @@ io.on('connection', (socket) => {
     });
 });
 
-server.listen(process.env.PORT || 1000);
+// Configured to Port 1000 as requested
+const PORT = process.env.PORT || 1000;
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on port ${PORT}`);
+});
