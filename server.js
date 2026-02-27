@@ -3,41 +3,58 @@ const app = express();
 const server = require('http').createServer(app);
 const io = require('socket.io')(server, { cors: { origin: "*" } });
 
-app.use(express.json());
 app.use(express.static(__dirname));
 
 let rooms = {};
 
-// API for Python Editor
-app.post('/api/create-room', (req, res) => {
-    const { roomName, mapData } = req.body;
-    rooms[roomName] = {
-        mapData,
-        players: { "dummy_bot": { x: 0, y: 0, username: "DUMMY_BOT", color: "#555", isBot: true } },
-    };
-    io.emit('roomList', Object.keys(rooms));
-    res.sendStatus(200);
-});
-
 io.on('connection', (socket) => {
     socket.emit('roomList', Object.keys(rooms));
+
+    socket.on('createRoom', (data) => {
+        const { roomName, mapData } = data;
+        rooms[roomName] = {
+            mapData: mapData,
+            players: { "dummy": { x: 50, y: 50, username: "DUMMY", color: "#444", isDummy: true } }
+        };
+        io.emit('roomList', Object.keys(rooms));
+    });
 
     socket.on('joinRoom', (data) => {
         const { roomName, username, color } = data;
         if (rooms[roomName]) {
             socket.join(roomName);
-            // Destroy dummy if real player joins
-            if (rooms[roomName].players["dummy_bot"]) {
-                delete rooms[roomName].players["dummy_bot"];
+            
+            // Remove dummy if a real player joins
+            if (rooms[roomName].players["dummy"]) {
+                delete rooms[roomName].players["dummy"];
             }
-            rooms[roomName].players[socket.id] = { x: 0, y: 0, username, color };
+
+            rooms[roomName].players[socket.id] = { x: 100, y: 100, username, color };
             socket.emit('mapUpdate', rooms[roomName].mapData);
             io.to(roomName).emit('state', rooms[roomName].players);
         }
     });
 
     socket.on('move', (pos) => {
-        // ... update logic
+        for (let room in rooms) {
+            if (rooms[room].players[socket.id]) {
+                rooms[room].players[socket.id].x = pos.x;
+                rooms[room].players[socket.id].y = pos.y;
+                io.to(room).emit('state', rooms[room].players);
+                break;
+            }
+        }
+    });
+
+    socket.on('disconnect', () => {
+        for (let room in rooms) {
+            if (rooms[room].players[socket.id]) {
+                delete rooms[room].players[socket.id];
+                if (Object.keys(rooms[room].players).length === 0) delete rooms[room];
+                io.emit('roomList', Object.keys(rooms));
+                break;
+            }
+        }
     });
 });
 
