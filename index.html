@@ -2,45 +2,145 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>maze</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maze Engine Pro - Online</title>
+    <script src="/socket.io/socket.io.js"></script>
     <style>
-        body { background: #121212; color: #eee; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; margin: 0; overflow: hidden; }
-        .main-layout { display: flex; width: 100vw; height: 100vh; }
-        .sidebar { width: 300px; background: #1e1e1e; padding: 20px; border-right: 1px solid #333; display: flex; flex-direction: column; }
-        .game-container { flex-grow: 1; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #000; }
-        canvas { border: 2px solid #444; box-shadow: 0 0 20px rgba(0,0,0,0.8); }
-        #chat-area { flex-grow: 1; background: #111; margin-top: 10px; border-radius: 5px; padding: 10px; overflow-y: auto; font-size: 13px; border: 1px solid #333; }
-        .msg { margin-bottom: 5px; }
-        .msg b { color: #007acc; }
-        input, button { padding: 10px; margin-top: 5px; border-radius: 4px; border: 1px solid #444; background: #2a2a2a; color: white; }
-        button { background: #007acc; cursor: pointer; border: none; font-weight: bold; }
-        .room-item { padding: 10px; background: #2a2a2a; margin: 5px 0; cursor: pointer; border-radius: 4px; }
-        .room-item:hover { background: #333; }
+        body {
+            background-color: #121212;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+        }
+
+        /* The UI Overlay Box */
+        #setup-ui {
+            background: #1e1e1e;
+            padding: 30px;
+            border-radius: 20px;
+            color: white;
+            width: 360px;
+            position: absolute;
+            z-index: 10;
+            box-shadow: 0 15px 50px rgba(0,0,0,0.8);
+            border: 1px solid #333;
+        }
+
+        h2 { margin-top: 0; color: #007acc; font-size: 24px; }
+        h3 { font-size: 12px; color: #777; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+
+        input, textarea {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 12px;
+            border-radius: 10px;
+            border: none;
+            background: #2a2a2a;
+            color: white;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+
+        textarea { height: 80px; resize: none; font-size: 11px; color: #888; }
+        input:focus, textarea:focus { outline: 2px solid #007acc; background: #333; }
+
+        /* Buttons */
+        #host-btn {
+            width: 100%;
+            padding: 14px;
+            border-radius: 12px;
+            border: none;
+            background: #007acc;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            transition: transform 0.1s, background 0.2s;
+        }
+
+        #host-btn:hover { background: #008be6; transform: translateY(-1px); }
+        #host-btn:active { transform: translateY(0); }
+
+        /* Room List */
+        #roomList {
+            margin-top: 10px;
+            max-height: 160px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding-right: 5px;
+        }
+
+        .join-btn {
+            background: #2a2a2a;
+            color: #ddd;
+            border: 1px solid #333;
+            padding: 12px;
+            border-radius: 10px;
+            cursor: pointer;
+            text-align: left;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .join-btn:hover {
+            background: #333;
+            border-color: #007acc;
+            color: white;
+        }
+
+        /* Scrollbar Styling */
+        #roomList::-webkit-scrollbar { width: 5px; }
+        #roomList::-webkit-scrollbar-track { background: #1e1e1e; }
+        #roomList::-webkit-scrollbar-thumb { background: #444; border-radius: 10px; }
+
+        /* Canvas Frame */
+        #game-container {
+            width: 1200px;
+            height: 800px;
+            background: #1e1e1e;
+            border-radius: 20px;
+            padding: 8px;
+            box-shadow: 0 0 40px rgba(0,0,0,0.5);
+        }
+
+        canvas {
+            background: #0d0d0d;
+            border-radius: 15px;
+            display: block;
+        }
     </style>
 </head>
 <body>
-    <div class="main-layout">
-        <div class="sidebar">
-            <h3>👤 PLAYER</h3>
-            <input type="text" id="username" placeholder="Username" value="Player1">
-            <input type="color" id="playerColor" value="#00ffcc">
-            <hr style="width:100%; border:0; border-top:1px solid #333">
-            <h3>🌍 SERVERS</h3>
-            <div id="roomList"></div>
-            <input type="text" id="roomName" placeholder="New Maze Name">
-            <textarea id="mazeInput" style="height:50px; background:#111; color:#0f0;" placeholder="Paste Python Code"></textarea>
-            <button onclick="hostMaze()">HOST & JOIN</button>
-            <hr style="width:100%; border:0; border-top:1px solid #333">
-            <h3>💬 CHAT</h3>
-            <div id="chat-area"></div>
-            <input type="text" id="chatInput" placeholder="Press Enter to send...">
-        </div>
-        <div class="game-container">
-            <div style="margin-bottom:10px">ROOM: <span id="curRoom" style="color:#007acc">None</span></div>
-            <canvas id="gameCanvas"></canvas>
+
+    <div id="setup-ui">
+        <h2>Maze Architect</h2>
+        
+        <input type="text" id="username" placeholder="Your Player Name">
+        
+        <div style="height: 1px; background: #333; margin: 20px 0;"></div>
+
+        <h3>Host Server</h3>
+        <input type="text" id="roomName" placeholder="Room Title">
+        <textarea id="mazeInput" placeholder="Paste .maze code from Python here..."></textarea>
+        <button id="host-btn" onclick="hostMaze()">🚀 CREATE & HOST</button>
+
+        <h3 style="margin-top: 25px;">Available Rooms</h3>
+        <div id="roomList">
+            <span style="color: #555; font-size: 12px;">Searching for live games...</span>
         </div>
     </div>
-    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
     <script src="game.js"></script>
+
 </body>
 </html>
