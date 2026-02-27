@@ -1,80 +1,62 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>Maze Engine: Unified Architect</title>
+    <title>Maze Engine Pro</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        :root { --accent: #007acc; --bg: #121212; --panel: #1e1e1e; }
-        body { background: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; margin: 0; overflow: hidden; }
-        
-        /* Tab System */
-        .tabs { display: flex; background: #000; padding: 10px 20px 0; gap: 5px; }
-        .tab { padding: 10px 25px; background: #222; border-radius: 10px 10px 0 0; cursor: pointer; border: none; color: #888; font-weight: bold; }
-        .tab.active { background: var(--panel); color: var(--accent); }
-
+        :root { --accent: #007acc; --bg: #121212; }
+        body { background: var(--bg); color: white; font-family: sans-serif; margin: 0; overflow: hidden; }
+        .tabs { display: flex; background: #000; padding: 10px 20px 0; }
+        .tab { padding: 10px 20px; border: none; background: #222; color: #888; cursor: pointer; border-radius: 10px 10px 0 0; margin-right: 5px; }
+        .tab.active { background: #1e1e1e; color: var(--accent); }
         .view { display: none; height: calc(100vh - 50px); }
         .view.active { display: flex; }
-
-        /* Sidebar & Layout */
-        .sidebar { width: 280px; background: var(--panel); padding: 20px; display: flex; flex-direction: column; gap: 10px; border-right: 1px solid #333; overflow-y: auto; }
-        .canvas-area { flex: 1; position: relative; display: flex; justify-content: center; align-items: center; background: #0d0d0d; }
-        canvas { background: #000; border-radius: 10px; box-shadow: 0 0 30px rgba(0,0,0,0.5); cursor: crosshair; }
-
-        input, textarea, select { width: 100%; padding: 10px; border-radius: 8px; border: none; background: #2a2a2a; color: white; box-sizing: border-box; }
-        button { padding: 10px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; transition: 0.2s; }
-        .btn-primary { background: var(--accent); color: white; }
-        .btn-tool { background: #333; color: #ccc; text-align: left; }
-        .btn-tool.active { background: var(--accent); color: white; }
-        
-        /* AI Section */
-        .ai-box { background: #151515; padding: 15px; border-radius: 10px; border: 1px dashed #444; margin-top: 10px; }
-        
-        #setup-ui { position: absolute; z-index: 100; background: rgba(30,30,30,0.95); padding: 40px; border-radius: 20px; box-shadow: 0 0 100px #000; }
+        .sidebar { width: 260px; background: #1e1e1e; padding: 20px; border-right: 1px solid #333; }
+        .canvas-area { flex: 1; background: #0d0d0d; display: flex; justify-content: center; align-items: center; position: relative; }
+        canvas { background: #000; border-radius: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        input, textarea { width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 8px; border: none; background: #2a2a2a; color: white; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; margin-bottom: 5px; }
+        .primary { background: var(--accent); color: white; }
+        .tool { background: #333; color: #ccc; }
+        .tool.active { background: var(--accent); color: white; }
+        #overlay { position: absolute; z-index: 10; background: rgba(30,30,30,0.9); padding: 30px; border-radius: 20px; }
     </style>
 </head>
 <body>
-
-<div class="tabs">
-    <button class="tab active" onclick="switchTab('play')">🕹️ PLAY</button>
-    <button class="tab" onclick="switchTab('edit')">🛠️ EDITOR</button>
-</div>
-
-<div id="view-play" class="view active">
-    <div id="setup-ui">
-        <h2>Join a Maze</h2>
-        <input type="text" id="username" placeholder="Username">
-        <input type="text" id="roomName" placeholder="Room Name">
-        <textarea id="mazeInput" placeholder="Paste code or host from Editor..."></textarea>
-        <button class="btn-primary" onclick="hostMaze()" style="width:100%">HOST GAME</button>
-        <div id="roomList" style="margin-top:20px"></div>
+    <div class="tabs">
+        <button class="tab active" onclick="switchTab('play')">🕹️ PLAY</button>
+        <button class="tab" onclick="switchTab('edit')">🛠️ BUILD</button>
     </div>
-    <div class="canvas-area"><canvas id="gameCanvas"></canvas></div>
-</div>
 
-<div id="view-edit" class="view">
-    <div class="sidebar">
-        <h3>Tools</h3>
-        <button class="btn-tool active" onclick="setTool('select', this)">🖱️ Select / Resize</button>
-        <button class="btn-tool" onclick="setTool('delete', this)">🗑️ Delete</button>
-        <button class="btn-tool" onclick="setTool('wall', this)">█ Wall</button>
-        <button class="btn-tool" onclick="setTool('door', this)">🚪 Door</button>
-        <button class="btn-tool" onclick="setTool('key', this)">🔑 Key</button>
-        <button class="btn-tool" onclick="setTool('portal', this)">🌀 Portal</button>
-        <button class="btn-tool" onclick="setTool('start', this)">🏠 Start</button>
-        <button class="btn-tool" onclick="setTool('end', this)">🏆 End</button>
-        
-        <div class="ai-box">
-            <h3>🤖 AI Architect</h3>
-            <textarea id="aiPrompt" placeholder="Describe a maze (e.g., 'a spiral with traps')"></textarea>
-            <button class="btn-primary" onclick="runAIArchitect()" style="width:100%; margin-top:5px;">GENERATE</button>
+    <div id="view-play" class="view active">
+        <div id="overlay">
+            <h2>Join Game</h2>
+            <input id="username" placeholder="Name">
+            <input id="roomName" placeholder="Room Title">
+            <textarea id="mazeInput" placeholder="Paste code here..."></textarea>
+            <button class="primary" onclick="hostMaze()">HOST ROOM</button>
+            <div id="roomList"></div>
         </div>
-
-        <button class="btn-primary" onclick="copyMazeCode()" style="margin-top:auto">📋 COPY CODE</button>
+        <div class="canvas-area"><canvas id="gameCanvas"></canvas></div>
     </div>
-    <div class="canvas-area"><canvas id="editorCanvas"></canvas></div>
-</div>
 
-<script src="game.js"></script>
+    <div id="view-edit" class="view">
+        <div class="sidebar">
+            <h3>Tools</h3>
+            <button class="tool active" onclick="setTool('select', this)">🖱️ SELECT</button>
+            <button class="tool" onclick="setTool('delete', this)">🗑️ DELETE</button>
+            <button class="tool" onclick="setTool('wall', this)">█ WALL</button>
+            <button class="tool" onclick="setTool('door', this)">🚪 DOOR</button>
+            <button class="tool" onclick="setTool('key', this)">🔑 KEY</button>
+            <button class="tool" onclick="setTool('start', this)">🏠 START</button>
+            <hr>
+            <h3>🤖 AI</h3>
+            <textarea id="aiPrompt" placeholder="Describe: 'a spiral maze'"></textarea>
+            <button class="primary" onclick="askAI()">GENERATE</button>
+            <button class="primary" onclick="copyCode()" style="margin-top:20px">📋 COPY CODE</button>
+        </div>
+        <div class="canvas-area"><canvas id="editorCanvas"></canvas></div>
+    </div>
+    <script src="game.js"></script>
 </body>
 </html>
