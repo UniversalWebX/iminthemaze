@@ -14,7 +14,7 @@ io.on('connection', (socket) => {
         const { roomName, mapData } = data;
         rooms[roomName] = {
             mapData: mapData,
-            players: { "dummy": { x: 50, y: 50, username: "DUMMY", color: "#444", isDummy: true } }
+            players: { "dummy": { x: 0, y: 0, username: "SERVER", color: "#333" } }
         };
         io.emit('roomList', Object.keys(rooms));
     });
@@ -23,12 +23,7 @@ io.on('connection', (socket) => {
         const { roomName, username, color } = data;
         if (rooms[roomName]) {
             socket.join(roomName);
-            
-            // Remove dummy if a real player joins
-            if (rooms[roomName].players["dummy"]) {
-                delete rooms[roomName].players["dummy"];
-            }
-
+            if (rooms[roomName].players["dummy"]) delete rooms[roomName].players["dummy"];
             rooms[roomName].players[socket.id] = { x: 100, y: 100, username, color };
             socket.emit('mapUpdate', rooms[roomName].mapData);
             io.to(roomName).emit('state', rooms[roomName].players);
@@ -36,21 +31,21 @@ io.on('connection', (socket) => {
     });
 
     socket.on('move', (pos) => {
-        for (let room in rooms) {
-            if (rooms[room].players[socket.id]) {
-                rooms[room].players[socket.id].x = pos.x;
-                rooms[room].players[socket.id].y = pos.y;
-                io.to(room).emit('state', rooms[room].players);
+        for (let r in rooms) {
+            if (rooms[r].players[socket.id]) {
+                rooms[r].players[socket.id].x = pos.x;
+                rooms[r].players[socket.id].y = pos.y;
+                io.to(r).emit('state', rooms[r].players);
                 break;
             }
         }
     });
 
     socket.on('disconnect', () => {
-        for (let room in rooms) {
-            if (rooms[room].players[socket.id]) {
-                delete rooms[room].players[socket.id];
-                if (Object.keys(rooms[room].players).length === 0) delete rooms[room];
+        for (let r in rooms) {
+            if (rooms[r].players[socket.id]) {
+                delete rooms[r].players[socket.id];
+                if (Object.keys(rooms[r].players).length === 0) delete rooms[r];
                 io.emit('roomList', Object.keys(rooms));
                 break;
             }
