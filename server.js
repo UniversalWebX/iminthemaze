@@ -24,7 +24,7 @@ io.on('connection', (socket) => {
         if (rooms[roomName]) {
             socket.join(roomName);
             if (rooms[roomName].players["dummy"]) delete rooms[roomName].players["dummy"];
-            rooms[roomName].players[socket.id] = { x: 100, y: 100, username, color };
+            rooms[roomName].players[socket.id] = { x: 0, y: 0, username, color };
             socket.emit('mapUpdate', rooms[roomName].mapData);
             io.to(roomName).emit('state', rooms[roomName].players);
         }
