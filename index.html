@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Maze Engine Pro</title>
+    <title>I'm In The Maze</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
         body { background-color: #121212; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; font-family: sans-serif; overflow: hidden; }
@@ -18,11 +18,11 @@
 </head>
 <body>
     <div id="setup-ui">
-        <h2>Maze Architect</h2>
+        <h2>Maze Menu</h2>
         <input type="text" id="username" placeholder="Your Player Name">
         <input type="text" id="roomName" placeholder="Room Title">
         <textarea id="mazeInput" placeholder="Paste .maze code here..."></textarea>
-        <button id="host-btn" onclick="hostMaze()">🚀 CREATE & HOST</button>
+        <button id="host-btn" onclick="hostMaze()">🚀 CREATE / HOST</button>
         <div id="roomList" style="margin-top: 20px;"></div>
     </div>
     <div id="game-container">
