@@ -1,0 +1,14 @@
+// ========================
+// PACKAGE.JSON - Project Dependencies & Scripts
+// ========================
+{
+  "name": "maze-engine-arcade",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "dependencies": {
+    "@google/generative-ai": "^0.21.0",
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2"
+  }
+}
