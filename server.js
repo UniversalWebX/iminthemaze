@@ -1,80 +1,150 @@
+// ========================
+// SERVER.JS - Backend / Socket.IO Server
+// Multiplayer Arcade Maze Engine
+// ========================
+
 const express = require('express');
 const app = express();
 const server = require('http').createServer(app);
-const io = require('socket.io')(server, { cors: { origin: "*" } });
+const io = require('socket.io')(server, {
+    cors: {
+        origin: "*",                    // ← In production change to your actual domain(s)
+        methods: ["GET", "POST"]
+    }
+});
+
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-const genAI = new GoogleGenerativeAI("YOUR_GEMINI_API_KEY"); // ← replace with real key
+// Use environment variable for API key (set this in Render dashboard)
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "AIzaSyBnfIO9jE0ZN-q2qnX1x6cN2zz7rIDRetE");
+
+// Use the port Render provides, fallback to 1000 for local dev
+const PORT = process.env.PORT || 1000;
+
+// Serve static files (index.html, game.js, etc.)
 app.use(express.static(__dirname));
 
+// Optional: Simple health check endpoint (Render & monitoring like it)
+app.get('/health', (req, res) => {
+    res.status(200).send('OK');
+});
+
+// In-memory storage for rooms (in production consider Redis if scaling)
 let rooms = {};
 
 io.on('connection', (socket) => {
+    console.log(`New connection: ${socket.id}`);
+
+    // Send current list of rooms to new client
     socket.emit('roomList', Object.keys(rooms));
 
+    // AI maze generation request
     socket.on('askAI', async (prompt) => {
         try {
             const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
             const aiPrompt = `Generate a JSON maze for a 1200x800 grid. Snap: 20px. 
             Format: {"id": {"type": "wall|door|key|portal|start|end", "x":0, "y":0, "w":20, "h":20, "color":"hex", "rot":0, "linkId":""}}.
-            User Request: "${prompt}". Return raw JSON only.`;
+            User Request: "${prompt}". Return raw JSON only. No explanations, no markdown.`;
+
             const result = await model.generateContent(aiPrompt);
-            const text = (await result.response).text().replace(/```json|```/g, "").trim();
-            socket.emit('aiResponse', JSON.parse(text));
+            const text = (await result.response).text()
+                .replace(/```json|```/g, "")
+                .trim();
+
+            let parsed;
+            try {
+                parsed = JSON.parse(text);
+            } catch (parseErr) {
+                console.error("AI JSON parse failed:", parseErr);
+                socket.emit('aiError', "Invalid JSON from AI");
+                return;
+            }
+
+            socket.emit('aiResponse', parsed);
         } catch (e) {
-            console.error(e);
-            socket.emit('aiError', "AI Error");
+            console.error("AI generation error:", e);
+            socket.emit('aiError', "AI Error - try again later");
         }
     });
 
+    // Create a new room
     socket.on('createRoom', (data) => {
-        if (!data.roomName || rooms[data.roomName]) return;
-        rooms[data.roomName] = { mapData: data.mapData || {}, players: {} };
+        if (!data || !data.roomName) return;
+        if (rooms[data.roomName]) {
+            socket.emit('error', 'Room already exists');
+            return;
+        }
+
+        rooms[data.roomName] = {
+            mapData: data.mapData || {},
+            players: {}
+        };
+
         io.emit('roomList', Object.keys(rooms));
+        console.log(`Room created: ${data.roomName}`);
     });
 
+    // Join an existing room
     socket.on('joinRoom', (data) => {
-        if (!rooms[data.roomName]) return;
+        if (!data || !data.roomName || !rooms[data.roomName]) {
+            socket.emit('error', 'Room not found');
+            return;
+        }
 
         socket.join(data.roomName);
 
-        const s = Object.values(rooms[data.roomName].mapData).find(o => o.type === 'start');
-        const sx = s ? s.x + 10 : 10;
-        const sy = s ? s.y + 10 : 10;
+        const room = rooms[data.roomName];
+        const startObj = Object.values(room.mapData).find(o => o.type === 'start');
+        const startX = startObj ? startObj.x + 10 : 10;
+        const startY = startObj ? startObj.y + 10 : 10;
 
-        rooms[data.roomName].players[socket.id] = { 
-            x: sx, 
-            y: sy, 
-            username: data.username || "Player", 
-            color: '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6,'0')
+        room.players[socket.id] = {
+            x: startX,
+            y: startY,
+            username: data.username || "Player",
+            color: '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0')
         };
 
-        socket.emit('mapUpdate', rooms[data.roomName].mapData);
-        io.to(data.roomName).emit('state', rooms[data.roomName].players);
+        // Send map to the joining player
+        socket.emit('mapUpdate', room.mapData);
+
+        // Broadcast updated player list to everyone in the room
+        io.to(data.roomName).emit('state', room.players);
+
+        console.log(`${data.username || socket.id} joined room: ${data.roomName}`);
     });
 
+    // Player movement
     socket.on('move', (pos) => {
-        for (let r in rooms) {
-            if (rooms[r].players[socket.id]) {
-                rooms[r].players[socket.id].x = pos.x;
-                rooms[r].players[socket.id].y = pos.y;
-                io.to(r).emit('state', rooms[r].players);
+        if (!pos || typeof pos.x !== 'number' || typeof pos.y !== 'number') return;
+
+        for (let roomName in rooms) {
+            const room = rooms[roomName];
+            if (room.players[socket.id]) {
+                room.players[socket.id].x = pos.x;
+                room.players[socket.id].y = pos.y;
+                io.to(roomName).emit('state', room.players);
                 break;
             }
         }
     });
 
+    // Handle disconnect
     socket.on('disconnect', () => {
-        for (let r in rooms) {
-            if (rooms[r].players[socket.id]) {
-                delete rooms[r].players[socket.id];
-                io.to(r).emit('state', rooms[r].players);
+        console.log(`Disconnected: ${socket.id}`);
+
+        for (let roomName in rooms) {
+            const room = rooms[roomName];
+            if (room.players[socket.id]) {
+                delete room.players[socket.id];
+                io.to(roomName).emit('state', room.players);
                 break;
             }
         }
     });
 });
 
-server.listen(1000, '0.0.0.0', () => {
-    console.log("Server listening on port 1000");
+// Start the server
+server.listen(PORT, '1000', () => {
+    console.log(`Server running on port ${PORT}  (Render uses process.env.PORT)`);
 });
