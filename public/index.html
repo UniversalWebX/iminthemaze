@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>im in the maze</title>
+  <title>Futuristic Maze Game</title>
   <link rel="stylesheet" href="style.css">
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
 </head>
@@ -23,12 +23,21 @@
       <button data-tool="door">Door</button>
       <button data-tool="key">Key</button>
       <button data-tool="spike">Spike</button>
-      <button data-tool="trigger-zipline">Zipline Trigger</button>
-      <button data-tool="start">Start Point</button>
-      <button data-tool="end">End Point</button>
+      <button data-tool="trigger-zipline">Zipline</button>
+      <button data-tool="start">Start</button>
+      <button data-tool="end">End</button>
       <button data-tool="draw">Draw</button>
+      <button data-tool="erase">Erase</button>
+      <button data-tool="select">Select</button>
       <button data-tool="rescale">Rescale</button>
       <button data-tool="rotate">Rotate</button>
+
+      <div style="margin: 10px 0; padding: 8px; background: rgba(0,255,204,0.08); border-radius: 6px;">
+        <label>Color: </label>
+        <input type="color" id="tool-color" value="#00ffcc">
+        <button id="apply-color">Apply to Tool</button>
+      </div>
+
       <button id="resize-maze">Resize Maze</button>
       <button id="ai-build">Ask AI to Build Maze</button>
       <button id="save-maze">Save Maze (JSON)</button>
