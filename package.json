@@ -1,7 +1,7 @@
 {
   "name": "maze-game",
   "version": "1.0.0",
-  "description": "Maze game with editor and play modes",
+  "description": "Futuristic 2D Maze Game with Editor and Play Modes",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
