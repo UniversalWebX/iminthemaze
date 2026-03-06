@@ -1,11 +1,9 @@
 const socket = io();
 
 // Constants
-const CELL_SIZE = 20;
-const GRAVITY = 0.5;
-const JUMP_FORCE = -10;
+const BASE_CELL_SIZE = 20;
+let CELL_SIZE = BASE_CELL_SIZE; // Dynamic
 const MOVE_SPEED = 5;
-const WAVE_SPEED = 5;
 
 // Maze data structure
 let maze = {
@@ -25,9 +23,6 @@ class Player {
     this.y = y;
     this.vx = 0;
     this.vy = 0;
-    this.mode = 'person'; // 'person' or 'wave'
-    this.gravityDir = 1; // 1 down, -1 up (but spec no flip)
-    this.grounded = false;
     this.keys = new Set();
     this.alive = true;
     this.inventory = new Set(); // keys
@@ -35,25 +30,11 @@ class Player {
 
   update() {
     this.vx = 0;
-    if (this.mode === 'person') {
-      if (this.keys.has('a') || this.keys.has('arrowleft')) this.vx -= MOVE_SPEED;
-      if (this.keys.has('d') || this.keys.has('arrowright')) this.vx += MOVE_SPEED;
-      if (this.keys.has('w') || this.keys.has('arrowup')) {} // No up in person?
-      if (this.keys.has('s') || this.keys.has('arrowdown')) {} // No down
-      if (this.keys.has(' ') && this.grounded) {
-        this.vy = JUMP_FORCE * this.gravityDir;
-        this.grounded = false;
-      }
-      this.vy += GRAVITY * this.gravityDir;
-    } else if (this.mode === 'wave') {
-      if (this.keys.has('a') || this.keys.has('arrowleft')) this.vx -= MOVE_SPEED;
-      if (this.keys.has('d') || this.keys.has('arrowright')) this.vx += MOVE_SPEED;
-      if (this.keys.has(' ')) {
-        this.vy = -WAVE_SPEED;
-      } else {
-        this.vy = WAVE_SPEED;
-      }
-    }
+    this.vy = 0;
+    if (this.keys.has('a') || this.keys.has('arrowleft')) this.vx -= MOVE_SPEED;
+    if (this.keys.has('d') || this.keys.has('arrowright')) this.vx += MOVE_SPEED;
+    if (this.keys.has('w') || this.keys.has('arrowup')) this.vy -= MOVE_SPEED;
+    if (this.keys.has('s') || this.keys.has('arrowdown')) this.vy += MOVE_SPEED;
 
     this.x += this.vx;
     this.y += this.vy;
@@ -70,8 +51,6 @@ class Player {
     if (this.isCollidingWith('wall')) {
       this.x -= this.vx;
       this.y -= this.vy;
-      this.vy = 0; // Stop vertical if hit
-      this.grounded = this.isGrounded();
     }
 
     // Spike
@@ -110,38 +89,6 @@ class Player {
         }
       }
     });
-
-    // Triggers
-    maze.objects.forEach(obj => {
-      if (this.isCollidingWithObj(obj)) {
-        switch (obj.type) {
-          case 'trigger-person':
-            this.mode = 'person';
-            break;
-          case 'trigger-wave':
-            this.mode = 'wave';
-            break;
-          case 'trigger-gravity':
-            if (this.mode !== 'wave') {
-              while (!this.isGrounded()) {
-                this.y += this.gravityDir * CELL_SIZE; // Drop by cell
-              }
-              this.vy = 0;
-              this.grounded = true;
-            }
-            break;
-        }
-      }
-    });
-
-    this.grounded = this.isGrounded();
-  }
-
-  isGrounded() {
-    const checkY = this.y + (CELL_SIZE / 2 + 1) * this.gravityDir;
-    const cellY = Math.floor(checkY / CELL_SIZE);
-    const cellX = Math.floor(this.x / CELL_SIZE);
-    return this.isCellType(cellX, cellY, 'wall');
   }
 
   isCollidingWith(type) {
@@ -193,15 +140,31 @@ document.getElementById('resize-maze').addEventListener('click', () => {
   maze.width = newWidth;
   maze.height = newHeight;
   initMaze();
-  resizeCanvas(editorCanvas, maze.width, maze.height);
+  updateCanvasSizes();
   drawMaze(editorCtx);
 });
 
-// Resize canvas
-function resizeCanvas(canvas, width, height) {
-  canvas.width = width * CELL_SIZE;
-  canvas.height = height * CELL_SIZE;
+// Update canvas sizes dynamically
+function updateCanvasSizes() {
+  const viewWidth = window.innerWidth * 0.8;
+  const viewHeight = window.innerHeight * 0.8;
+  const scaleX = viewWidth / (maze.width * BASE_CELL_SIZE);
+  const scaleY = viewHeight / (maze.height * BASE_CELL_SIZE);
+  CELL_SIZE = BASE_CELL_SIZE * Math.min(scaleX, scaleY);
+
+  const canvasWidth = maze.width * CELL_SIZE;
+  const canvasHeight = maze.height * CELL_SIZE;
+
+  if (isEditor) {
+    editorCanvas.width = canvasWidth;
+    editorCanvas.height = canvasHeight;
+  } else if (isSingleplayer || isMultiplayer) {
+    playCanvas.width = canvasWidth;
+    playCanvas.height = canvasHeight;
+  }
 }
+
+window.addEventListener('resize', updateCanvasSizes);
 
 // Draw maze
 function drawMaze(ctx) {
@@ -209,10 +172,10 @@ function drawMaze(ctx) {
   for (let y = 0; y < maze.height; y++) {
     for (let x = 0; x < maze.width; x++) {
       if (maze.cells[y][x] === 'wall') {
-        ctx.fillStyle = '#000';
+        ctx.fillStyle = '#00ffcc';
         ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
       } else if (maze.cells[y][x] === 'spike') {
-        ctx.fillStyle = '#f00';
+        ctx.fillStyle = '#ff00ff';
         ctx.beginPath();
         ctx.moveTo(x * CELL_SIZE, (y + 1) * CELL_SIZE);
         ctx.lineTo((x + 0.5) * CELL_SIZE, y * CELL_SIZE);
@@ -229,46 +192,33 @@ function drawMaze(ctx) {
     ctx.translate(-CELL_SIZE / 2, -CELL_SIZE / 2);
     switch (obj.type) {
       case 'portal':
-        ctx.fillStyle = '#00f';
+        ctx.fillStyle = '#00ffff';
         ctx.fillRect(0, 0, CELL_SIZE, CELL_SIZE);
         break;
       case 'door':
-        ctx.fillStyle = '#800';
+        ctx.fillStyle = '#ff6600';
         ctx.fillRect(0, 0, CELL_SIZE, CELL_SIZE);
         break;
       case 'key':
-        ctx.fillStyle = '#ff0';
+        ctx.fillStyle = '#ffff00';
         ctx.beginPath();
         ctx.arc(CELL_SIZE / 2, CELL_SIZE / 2, CELL_SIZE / 4, 0, Math.PI * 2);
         ctx.fill();
         break;
-      case 'trigger-person':
-        ctx.fillStyle = '#0f0';
-        ctx.fillRect(0, 0, CELL_SIZE, CELL_SIZE);
-        break;
-      case 'trigger-wave':
-        ctx.fillStyle = '#0ff';
-        ctx.fillRect(0, 0, CELL_SIZE, CELL_SIZE);
-        break;
-      case 'trigger-gravity':
-        ctx.fillStyle = '#f0f';
-        ctx.fillRect(0, 0, CELL_SIZE, CELL_SIZE);
-        break;
       case 'trigger-zipline':
-        ctx.fillStyle = '#888';
+        ctx.fillStyle = '#8888ff';
         ctx.beginPath();
         ctx.arc(CELL_SIZE / 2, CELL_SIZE / 2, CELL_SIZE / 2, 0, Math.PI * 2);
         ctx.fill();
         break;
-      // start and end as circles or something
       case 'start':
-        ctx.fillStyle = '#0f0';
+        ctx.fillStyle = '#00ff00';
         ctx.beginPath();
         ctx.arc(CELL_SIZE / 2, CELL_SIZE / 2, CELL_SIZE / 2, 0, Math.PI * 2);
         ctx.fill();
         break;
       case 'end':
-        ctx.fillStyle = '#f00';
+        ctx.fillStyle = '#ff0000';
         ctx.beginPath();
         ctx.arc(CELL_SIZE / 2, CELL_SIZE / 2, CELL_SIZE / 2, 0, Math.PI * 2);
         ctx.fill();
@@ -285,19 +235,10 @@ function drawPlayers(ctx) {
     if (!p.alive) continue;
     ctx.save();
     ctx.translate(p.x, p.y);
-    if (p.mode === 'person') {
-      ctx.fillStyle = id === (isSingleplayer ? 'local' : socket.id) ? '#00f' : '#0f0';
-      ctx.fillRect(-CELL_SIZE / 2, -CELL_SIZE / 2, CELL_SIZE, CELL_SIZE);
-    } else {
-      ctx.fillStyle = id === (isSingleplayer ? 'local' : socket.id) ? '#00f' : '#0f0';
-      ctx.beginPath();
-      ctx.moveTo(-CELL_SIZE / 2, 0);
-      ctx.lineTo(0, -CELL_SIZE / 2);
-      ctx.lineTo(CELL_SIZE / 2, 0);
-      ctx.lineTo(0, CELL_SIZE / 2);
-      ctx.closePath();
-      ctx.fill();
-    }
+    ctx.fillStyle = id === (isSingleplayer ? 'local' : socket.id) ? '#00ffff' : '#ff00ff';
+    ctx.beginPath();
+    ctx.arc(0, 0, CELL_SIZE / 2, 0, Math.PI * 2);
+    ctx.fill();
     ctx.restore();
   }
 }
@@ -349,7 +290,6 @@ function handleEditorClick(e) {
   } else if (currentTool === 'portal') {
     const id = ++portalCounter;
     maze.objects.push({type: 'portal', x, y, scale:1, rotation:0, id, pairId: null});
-    // Pair with last unpaired
     const unpaired = maze.objects.find(o => o.type === 'portal' && o.pairId === null && o.id !== id);
     if (unpaired) {
       unpaired.pairId = id;
@@ -357,10 +297,9 @@ function handleEditorClick(e) {
     }
   } else if (currentTool === 'door') {
     const keyId = ++doorKeyCounter;
-    // Prompt for key position? But for simplicity, place door, key separately, link by id
     maze.objects.push({type: 'door', x, y, scale:1, rotation:0, keyId});
   } else if (currentTool === 'key') {
-    const keyId = doorKeyCounter; // Assume last door's key
+    const keyId = doorKeyCounter;
     maze.objects.push({type: 'key', x, y, scale:1, rotation:0, id: keyId});
   } else if (['wall', 'spike'].includes(currentTool)) {
     maze.cells[gridY][gridX] = currentTool;
@@ -404,7 +343,7 @@ playCanvas.addEventListener('click', (e) => {
           if (isMultiplayer) {
             socket.emit('objectUpdate', {roomId, objects: maze.objects});
           }
-          return false; // Remove one-time
+          return false;
         }
       }
       return true;
@@ -413,7 +352,6 @@ playCanvas.addEventListener('click', (e) => {
 });
 
 function lineOfSight(x0, y0, x1, y1) {
-  // Bresenham's line algorithm to check for walls
   x0 = Math.floor(x0 / CELL_SIZE);
   y0 = Math.floor(y0 / CELL_SIZE);
   x1 = Math.floor(x1 / CELL_SIZE);
@@ -454,7 +392,6 @@ function gameLoop(time) {
     const localPlayer = players[localId];
     if (localPlayer && localPlayer.alive) {
       localPlayer.update();
-      // Check win
       const endObj = maze.objects.find(o => o.type === 'end');
       if (endObj && Math.hypot(localPlayer.x - (endObj.x + CELL_SIZE/2), localPlayer.y - (endObj.y + CELL_SIZE/2)) < CELL_SIZE) {
         alert('You win!');
@@ -471,28 +408,29 @@ function gameLoop(time) {
 
 // AI build
 document.getElementById('ai-build').addEventListener('click', async () => {
-  const prompt = document.getElementById('ai-prompt').value || 'Generate a maze as JSON: {width:50, height:30, cells:2D array of null/"wall"/"spike", objects:[{type:"portal"/"door"/"key"/"trigger-person"/etc, x:int*CELL_SIZE, y:int*CELL_SIZE, scale:1, rotation:0, id:?, pairId:for portals, keyId:for doors/keys}], start:{x:0,y:0}, end:{x:49,y:29}}';
-  // Replace with your API key
-  const API_KEY = 'AIzaSyBnfIO9jE0ZN-q2qnX1x6cN2zz7rIDRetE';
+  const prompt = `Generate a futuristic 2D maze layout as valid JSON: {width:50, height:30, cells:2D array of null/"wall"/"spike", objects:[{type:"portal"/"door"/"key"/"trigger-zipline", x:number (grid*CELL_SIZE), y:number, scale:1, rotation:0, id:number, pairId:for portals, keyId:for doors/keys}], start:{x:0,y:0}, end:{x:49,y:29}}. Description: ${document.getElementById('ai-prompt').value || 'A sci-fi labyrinth with neon walls, portals, and traps'}`;
+  const API_KEY = 'YOUR_GEMINI_API_KEY'; // Replace with actual key
   try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${API_KEY}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${API_KEY}`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
         contents: [{parts: [{text: prompt}]}]
       })
     });
+    if (!response.ok) throw new Error('API error');
     const data = await response.json();
-    const aiMazeText = data.candidates[0].content.parts[0].text.replace(/```json|```/g, '').trim();
+    let aiMazeText = data.candidates[0].content.parts[0].text;
+    aiMazeText = aiMazeText.replace(/```json|```/g, '').trim(); // Clean up
     const aiMaze = JSON.parse(aiMazeText);
     maze = aiMaze;
     initMaze();
-    // Fill cells from aiMaze.cells
-    maze.cells = aiMaze.cells;
-    resizeCanvas(editorCanvas, maze.width, maze.height);
+    maze.cells = aiMaze.cells || maze.cells;
+    updateCanvasSizes();
     drawMaze(editorCtx);
   } catch (error) {
     console.error('AI error:', error);
+    alert('Failed to generate maze from AI. Check console.');
   }
 });
 
@@ -512,8 +450,8 @@ document.getElementById('load-maze').addEventListener('click', () => {
   if (saved) {
     maze = JSON.parse(saved);
     initMaze();
-    maze.cells = maze.cells; // Already set
-    resizeCanvas(editorCanvas, maze.width, maze.height);
+    maze.cells = maze.cells;
+    updateCanvasSizes();
     drawMaze(editorCtx);
   }
 });
@@ -525,7 +463,7 @@ document.getElementById('editor-btn').addEventListener('click', () => {
   document.getElementById('editor').style.display = 'block';
   editorCtx = editorCanvas.getContext('2d');
   initMaze();
-  resizeCanvas(editorCanvas, maze.width, maze.height);
+  updateCanvasSizes();
   drawMaze(editorCtx);
 });
 
@@ -538,7 +476,7 @@ document.getElementById('singleplayer-btn').addEventListener('click', () => {
   if (saved) maze = JSON.parse(saved);
   initMaze();
   maze.cells = maze.cells;
-  resizeCanvas(playCanvas, maze.width, maze.height);
+  updateCanvasSizes();
   players['local'] = new Player('local', maze.start.x * CELL_SIZE + CELL_SIZE/2, maze.start.y * CELL_SIZE + CELL_SIZE/2);
   gameLoop(0);
 });
@@ -576,7 +514,7 @@ function startMultiplayer() {
   playCtx = playCanvas.getContext('2d');
   initMaze();
   maze.cells = maze.cells;
-  resizeCanvas(playCanvas, maze.width, maze.height);
+  updateCanvasSizes();
   players[socket.id] = new Player(socket.id, maze.start.x * CELL_SIZE + CELL_SIZE/2, maze.start.y * CELL_SIZE + CELL_SIZE/2);
   gameLoop(0);
 }
@@ -590,8 +528,7 @@ socket.on('objectsUpdate', (updatedObjects) => {
   maze.objects = updatedObjects;
 });
 
-// Additional features: camera follow player? But for now, full maze view.
-// Death respawn? Alert and respawn.
+// Respawn on 'r'
 document.addEventListener('keydown', (e) => {
   if (e.key === 'r') {
     const localPlayer = players[isSingleplayer ? 'local' : socket.id];
