@@ -409,7 +409,7 @@ function gameLoop(time) {
 // AI build
 document.getElementById('ai-build').addEventListener('click', async () => {
   const prompt = `Generate a futuristic 2D maze layout as valid JSON: {width:50, height:30, cells:2D array of null/"wall"/"spike", objects:[{type:"portal"/"door"/"key"/"trigger-zipline", x:number (grid*CELL_SIZE), y:number, scale:1, rotation:0, id:number, pairId:for portals, keyId:for doors/keys}], start:{x:0,y:0}, end:{x:49,y:29}}. Description: ${document.getElementById('ai-prompt').value || 'A sci-fi labyrinth with neon walls, portals, and traps'}`;
-  const API_KEY = 'YOUR_GEMINI_API_KEY'; // Replace with actual key
+  const API_KEY = 'AIzaSyBnfIO9jE0ZN-q2qnX1x6cN2zz7rIDRetE'; // Replace with actual key
   try {
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${API_KEY}`, {
       method: 'POST',
