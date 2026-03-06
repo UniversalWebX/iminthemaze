@@ -1,21 +1,22 @@
 const socket = io();
 
 // Constants
-const BASE_CELL_SIZE = 20;
-let CELL_SIZE = BASE_CELL_SIZE; // Dynamic
+const DEFAULT_GRID_SIZE = 20;
+let CELL_SIZE = DEFAULT_GRID_SIZE;
 const MOVE_SPEED = 5;
 
 // Maze data structure
 let maze = {
-  width: 50,
-  height: 30,
-  cells: [], // 2D array for walls, etc.
-  objects: [], // {type, x, y, scale:1, rotation:0, id: unique, pairId: for portals, ...}
-  start: {x:0, y:0},
-  end: {x:49, y:29}
+  width: 60,
+  height: 40,
+  cells: [],
+  objects: [],
+  start: {x: 2, y: 2},
+  end: {x: 57, y: 37},
+  gridSize: DEFAULT_GRID_SIZE
 };
 
-// Player
+// Player class
 class Player {
   constructor(id, x, y) {
     this.id = id;
@@ -25,7 +26,7 @@ class Player {
     this.vy = 0;
     this.keys = new Set();
     this.alive = true;
-    this.inventory = new Set(); // keys
+    this.inventory = new Set();
   }
 
   update() {
@@ -39,26 +40,19 @@ class Player {
     this.x += this.vx;
     this.y += this.vy;
 
-    // Collisions
     this.checkCollisions();
   }
 
   checkCollisions() {
-    const cellX = Math.floor(this.x / CELL_SIZE);
-    const cellY = Math.floor(this.y / CELL_SIZE);
-
-    // Wall collision
     if (this.isCollidingWith('wall')) {
       this.x -= this.vx;
       this.y -= this.vy;
     }
 
-    // Spike
     if (this.isCollidingWith('spike')) {
       this.alive = false;
     }
 
-    // Keys
     maze.objects = maze.objects.filter(obj => {
       if (obj.type === 'key' && this.isCollidingWithObj(obj)) {
         this.inventory.add(obj.id);
@@ -67,7 +61,6 @@ class Player {
       return true;
     });
 
-    // Doors
     maze.objects.forEach(obj => {
       if (obj.type === 'door' && this.isCollidingWithObj(obj)) {
         if (this.inventory.has(obj.keyId)) {
@@ -77,10 +70,6 @@ class Player {
           this.y -= this.vy;
         }
       }
-    });
-
-    // Portals
-    maze.objects.forEach(obj => {
       if (obj.type === 'portal' && this.isCollidingWithObj(obj)) {
         const pair = maze.objects.find(o => o.type === 'portal' && o.pairId === obj.id);
         if (pair) {
@@ -101,7 +90,7 @@ class Player {
   }
 
   isCollidingWithObj(obj) {
-    return Math.hypot(obj.x - this.x, obj.y - this.y) < CELL_SIZE;
+    return Math.hypot(obj.x - this.x, obj.y - this.y) < CELL_SIZE * 1.2;
   }
 
   isCellType(x, y, type) {
@@ -116,7 +105,7 @@ let drawing = false;
 let portalCounter = 0;
 let doorKeyCounter = 0;
 
-// Canvases
+// Canvases & contexts
 const editorCanvas = document.getElementById('editor-canvas');
 const playCanvas = document.getElementById('play-canvas');
 let editorCtx, playCtx;
@@ -128,169 +117,140 @@ let isMultiplayer = false;
 let roomId = null;
 let players = {};
 
-// Init maze cells
+// Init maze
 function initMaze() {
   maze.cells = Array.from({length: maze.height}, () => Array(maze.width).fill(null));
 }
 
-// Resize maze
-document.getElementById('resize-maze').addEventListener('click', () => {
-  const newWidth = parseInt(prompt('New width:', maze.width)) || maze.width;
-  const newHeight = parseInt(prompt('New height:', maze.height)) || maze.height;
-  maze.width = newWidth;
-  maze.height = newHeight;
-  initMaze();
-  updateCanvasSizes();
-  drawMaze(editorCtx);
-});
-
-// Update canvas sizes dynamically
+// Resize canvas dynamically
 function updateCanvasSizes() {
   const viewWidth = window.innerWidth * 0.8;
-  const viewHeight = window.innerHeight * 0.8;
-  const scaleX = viewWidth / (maze.width * BASE_CELL_SIZE);
-  const scaleY = viewHeight / (maze.height * BASE_CELL_SIZE);
-  CELL_SIZE = BASE_CELL_SIZE * Math.min(scaleX, scaleY);
+  const viewHeight = window.innerHeight * 0.7;
+  const scaleX = viewWidth / (maze.width * maze.gridSize);
+  const scaleY = viewHeight / (maze.height * maze.gridSize);
+  CELL_SIZE = maze.gridSize * Math.min(scaleX, scaleY, 1.5); // cap max size
 
-  const canvasWidth = maze.width * CELL_SIZE;
-  const canvasHeight = maze.height * CELL_SIZE;
+  const w = maze.width * CELL_SIZE;
+  const h = maze.height * CELL_SIZE;
 
   if (isEditor) {
-    editorCanvas.width = canvasWidth;
-    editorCanvas.height = canvasHeight;
+    editorCanvas.width = w;
+    editorCanvas.height = h;
   } else if (isSingleplayer || isMultiplayer) {
-    playCanvas.width = canvasWidth;
-    playCanvas.height = canvasHeight;
+    playCanvas.width = w;
+    playCanvas.height = h;
   }
 }
 
 window.addEventListener('resize', updateCanvasSizes);
 
-// Draw maze
+// Draw functions (simplified version - expand as needed)
 function drawMaze(ctx) {
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+  // Grid
+  ctx.strokeStyle = '#1a1a2e';
+  for (let i = 0; i <= maze.width; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i * CELL_SIZE, 0);
+    ctx.lineTo(i * CELL_SIZE, ctx.canvas.height);
+    ctx.stroke();
+  }
+  for (let i = 0; i <= maze.height; i++) {
+    ctx.beginPath();
+    ctx.moveTo(0, i * CELL_SIZE);
+    ctx.lineTo(ctx.canvas.width, i * CELL_SIZE);
+    ctx.stroke();
+  }
+
+  // Cells
   for (let y = 0; y < maze.height; y++) {
     for (let x = 0; x < maze.width; x++) {
-      if (maze.cells[y][x] === 'wall') {
-        ctx.fillStyle = '#00ffcc';
+      const type = maze.cells[y][x];
+      if (type === 'wall') {
+        ctx.fillStyle = '#5dade2';
         ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
-      } else if (maze.cells[y][x] === 'spike') {
+      } else if (type === 'spike') {
         ctx.fillStyle = '#ff00ff';
         ctx.beginPath();
-        ctx.moveTo(x * CELL_SIZE, (y + 1) * CELL_SIZE);
-        ctx.lineTo((x + 0.5) * CELL_SIZE, y * CELL_SIZE);
-        ctx.lineTo((x + 1) * CELL_SIZE, (y + 1) * CELL_SIZE);
+        ctx.moveTo(x * CELL_SIZE + CELL_SIZE/2, y * CELL_SIZE);
+        ctx.lineTo(x * CELL_SIZE, y * CELL_SIZE + CELL_SIZE);
+        ctx.lineTo(x * CELL_SIZE + CELL_SIZE, y * CELL_SIZE + CELL_SIZE);
+        ctx.closePath();
         ctx.fill();
       }
     }
   }
+
+  // Objects
   maze.objects.forEach(obj => {
     ctx.save();
-    ctx.translate(obj.x + CELL_SIZE / 2, obj.y + CELL_SIZE / 2);
-    ctx.rotate(obj.rotation * Math.PI / 180);
-    ctx.scale(obj.scale, obj.scale);
-    ctx.translate(-CELL_SIZE / 2, -CELL_SIZE / 2);
+    ctx.translate(obj.x + CELL_SIZE/2, obj.y + CELL_SIZE/2);
+    ctx.rotate((obj.rotation || 0) * Math.PI / 180);
+    ctx.scale(obj.scale || 1, obj.scale || 1);
+    ctx.translate(-CELL_SIZE/2, -CELL_SIZE/2);
+
+    let color = '#ffffff';
     switch (obj.type) {
-      case 'portal':
-        ctx.fillStyle = '#00ffff';
-        ctx.fillRect(0, 0, CELL_SIZE, CELL_SIZE);
-        break;
-      case 'door':
-        ctx.fillStyle = '#ff6600';
-        ctx.fillRect(0, 0, CELL_SIZE, CELL_SIZE);
-        break;
-      case 'key':
-        ctx.fillStyle = '#ffff00';
-        ctx.beginPath();
-        ctx.arc(CELL_SIZE / 2, CELL_SIZE / 2, CELL_SIZE / 4, 0, Math.PI * 2);
-        ctx.fill();
-        break;
-      case 'trigger-zipline':
-        ctx.fillStyle = '#8888ff';
-        ctx.beginPath();
-        ctx.arc(CELL_SIZE / 2, CELL_SIZE / 2, CELL_SIZE / 2, 0, Math.PI * 2);
-        ctx.fill();
-        break;
-      case 'start':
-        ctx.fillStyle = '#00ff00';
-        ctx.beginPath();
-        ctx.arc(CELL_SIZE / 2, CELL_SIZE / 2, CELL_SIZE / 2, 0, Math.PI * 2);
-        ctx.fill();
-        break;
-      case 'end':
-        ctx.fillStyle = '#ff0000';
-        ctx.beginPath();
-        ctx.arc(CELL_SIZE / 2, CELL_SIZE / 2, CELL_SIZE / 2, 0, Math.PI * 2);
-        ctx.fill();
-        break;
+      case 'portal':   color = '#9b59b6'; break;
+      case 'door':     color = '#e67e22'; break;
+      case 'key':      color = '#f1c40f'; break;
+      case 'start':    color = '#27ae60'; break;
+      case 'end':      color = '#e74c3c'; break;
+      case 'trigger-zipline': color = '#8888ff'; break;
     }
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, CELL_SIZE, CELL_SIZE);
+
     ctx.restore();
   });
 }
 
-// Draw players
 function drawPlayers(ctx) {
   for (let id in players) {
     const p = players[id];
     if (!p.alive) continue;
-    ctx.save();
-    ctx.translate(p.x, p.y);
-    ctx.fillStyle = id === (isSingleplayer ? 'local' : socket.id) ? '#00ffff' : '#ff00ff';
+    ctx.fillStyle = (id === (isSingleplayer ? 'local' : socket.id)) ? '#00ffff' : '#ff00ff';
     ctx.beginPath();
-    ctx.arc(0, 0, CELL_SIZE / 2, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, CELL_SIZE / 2, 0, Math.PI * 2);
     ctx.fill();
-    ctx.restore();
   }
 }
 
-// Editor event listeners
-editorCanvas.addEventListener('mousedown', (e) => {
-  if (currentTool === 'draw') {
-    drawing = true;
-  }
-  handleEditorClick(e);
-});
-
-editorCanvas.addEventListener('mousemove', (e) => {
-  if (drawing && currentTool === 'draw') {
-    handleEditorClick(e);
-  }
-});
-
-editorCanvas.addEventListener('mouseup', () => {
-  drawing = false;
-});
-
-function handleEditorClick(e) {
+// Editor click handling (simplified - expand for draw/rescale/rotate as needed)
+function handleEditorClick(e, isDrag = false) {
   const rect = editorCanvas.getBoundingClientRect();
-  const gridX = Math.floor((e.clientX - rect.left) / CELL_SIZE);
-  const gridY = Math.floor((e.clientY - rect.top) / CELL_SIZE);
-  const x = gridX * CELL_SIZE;
-  const y = gridY * CELL_SIZE;
+  let x = e.clientX - rect.left;
+  let y = e.clientY - rect.top;
+
+  if (maze.gridSize) {
+    x = Math.round(x / CELL_SIZE) * CELL_SIZE;
+    y = Math.round(y / CELL_SIZE) * CELL_SIZE;
+  }
+
+  const gridX = Math.round(x / CELL_SIZE);
+  const gridY = Math.round(y / CELL_SIZE);
 
   if (currentTool === 'draw') {
-    maze.cells[gridY][gridX] = 'wall';
-  } else if (currentTool === 'rescale' || currentTool === 'rotate') {
-    selectedObject = maze.objects.find(obj => Math.abs(obj.x - x) < CELL_SIZE && Math.abs(obj.y - y) < CELL_SIZE);
-    if (selectedObject) {
-      if (currentTool === 'rescale') {
-        selectedObject.scale = parseFloat(prompt('New scale:', selectedObject.scale)) || 1;
-      } else {
-        selectedObject.rotation = parseFloat(prompt('New rotation (degrees):', selectedObject.rotation)) || 0;
-      }
+    if (gridY >= 0 && gridY < maze.height && gridX >= 0 && gridX < maze.width) {
+      maze.cells[gridY][gridX] = 'wall';
+    }
+  } else if (['wall', 'spike'].includes(currentTool)) {
+    if (gridY >= 0 && gridY < maze.height && gridX >= 0 && gridX < maze.width) {
+      maze.cells[gridY][gridX] = currentTool;
     }
   } else if (currentTool === 'start') {
     maze.start = {x: gridX, y: gridY};
-    maze.objects = maze.objects.filter(obj => obj.type !== 'start');
+    maze.objects = maze.objects.filter(o => o.type !== 'start');
     maze.objects.push({type: 'start', x, y, scale:1, rotation:0});
   } else if (currentTool === 'end') {
     maze.end = {x: gridX, y: gridY};
-    maze.objects = maze.objects.filter(obj => obj.type !== 'end');
+    maze.objects = maze.objects.filter(o => o.type !== 'end');
     maze.objects.push({type: 'end', x, y, scale:1, rotation:0});
   } else if (currentTool === 'portal') {
     const id = ++portalCounter;
     maze.objects.push({type: 'portal', x, y, scale:1, rotation:0, id, pairId: null});
-    const unpaired = maze.objects.find(o => o.type === 'portal' && o.pairId === null && o.id !== id);
+    const unpaired = maze.objects.find(o => o.type === 'portal' && !o.pairId && o.id !== id);
     if (unpaired) {
       unpaired.pairId = id;
       maze.objects.find(o => o.id === id).pairId = unpaired.id;
@@ -299,164 +259,196 @@ function handleEditorClick(e) {
     const keyId = ++doorKeyCounter;
     maze.objects.push({type: 'door', x, y, scale:1, rotation:0, keyId});
   } else if (currentTool === 'key') {
-    const keyId = doorKeyCounter;
-    maze.objects.push({type: 'key', x, y, scale:1, rotation:0, id: keyId});
-  } else if (['wall', 'spike'].includes(currentTool)) {
-    maze.cells[gridY][gridX] = currentTool;
+    maze.objects.push({type: 'key', x, y, scale:1, rotation:0, keyId: doorKeyCounter});
   } else {
     maze.objects.push({type: currentTool, x, y, scale:1, rotation:0, id: Math.random()});
   }
+
   drawMaze(editorCtx);
 }
 
-// Play controls
-document.addEventListener('keydown', (e) => {
-  const key = e.key.toLowerCase() === ' ' ? ' ' : e.key.toLowerCase();
-  const localPlayer = players[isSingleplayer ? 'local' : socket.id];
-  if (localPlayer) {
-    localPlayer.keys.add(key);
-  }
+editorCanvas.addEventListener('click', e => handleEditorClick(e));
+editorCanvas.addEventListener('mousedown', e => { if (currentTool === 'draw') drawing = true; });
+editorCanvas.addEventListener('mousemove', e => { if (drawing) handleEditorClick(e, true); });
+editorCanvas.addEventListener('mouseup', () => drawing = false);
+
+// Controls
+document.addEventListener('keydown', e => {
+  const key = e.key.toLowerCase();
+  const player = players[isSingleplayer ? 'local' : socket.id];
+  if (player) player.keys.add(key);
 });
 
-document.addEventListener('keyup', (e) => {
-  const key = e.key.toLowerCase() === ' ' ? ' ' : e.key.toLowerCase();
-  const localPlayer = players[isSingleplayer ? 'local' : socket.id];
-  if (localPlayer) {
-    localPlayer.keys.delete(key);
-  }
+document.addEventListener('keyup', e => {
+  const key = e.key.toLowerCase();
+  const player = players[isSingleplayer ? 'local' : socket.id];
+  if (player) player.keys.delete(key);
 });
 
-// Zipline click
-playCanvas.addEventListener('click', (e) => {
-  if (isSingleplayer || isMultiplayer) {
-    const rect = playCanvas.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const clickY = e.clientY - rect.top;
-    const localPlayer = players[isSingleplayer ? 'local' : socket.id];
-    maze.objects = maze.objects.filter(obj => {
-      if (obj.type === 'trigger-zipline' && Math.hypot(obj.x + CELL_SIZE/2 - clickX, obj.y + CELL_SIZE/2 - clickY) < CELL_SIZE / 2) {
-        if (lineOfSight(localPlayer.x, localPlayer.y, obj.x + CELL_SIZE/2, obj.y + CELL_SIZE/2)) {
-          localPlayer.vx = 0;
-          localPlayer.vy = 0;
-          localPlayer.x = obj.x + CELL_SIZE/2;
-          localPlayer.y = obj.y + CELL_SIZE/2;
-          if (isMultiplayer) {
-            socket.emit('objectUpdate', {roomId, objects: maze.objects});
-          }
-          return false;
+// Save Maze - generates Python-compatible JSON
+document.getElementById('save-maze').addEventListener('click', () => {
+  const exportData = {};
+
+  // Objects
+  maze.objects.forEach(obj => {
+    const key = `obj_${Math.round(obj.x)}_${Math.round(obj.y)}`;
+    exportData[key] = {
+      type: obj.type,
+      x: Math.round(obj.x),
+      y: Math.round(obj.y),
+      w: maze.gridSize,
+      h: maze.gridSize,
+      color: getToolColor(obj.type),
+      rot: Math.round(obj.rotation || 0),
+      linkId: obj.pairId || obj.keyId || ""
+    };
+  });
+
+  // Cells → wall/spike objects
+  for (let gy = 0; gy < maze.height; gy++) {
+    for (let gx = 0; gx < maze.width; gx++) {
+      const type = maze.cells[gy]?.[gx];
+      if (type && type !== null) {
+        const px = gx * maze.gridSize;
+        const py = gy * maze.gridSize;
+        const key = `obj_${px}_${py}`;
+        if (!(key in exportData)) {
+          exportData[key] = {
+            type,
+            x: px,
+            y: py,
+            w: maze.gridSize,
+            h: maze.gridSize,
+            color: getToolColor(type),
+            rot: 0,
+            linkId: ""
+          };
         }
       }
-      return true;
-    });
-  }
-});
-
-function lineOfSight(x0, y0, x1, y1) {
-  x0 = Math.floor(x0 / CELL_SIZE);
-  y0 = Math.floor(y0 / CELL_SIZE);
-  x1 = Math.floor(x1 / CELL_SIZE);
-  y1 = Math.floor(y1 / CELL_SIZE);
-
-  const dx = Math.abs(x1 - x0);
-  const dy = Math.abs(y1 - y0);
-  const sx = x0 < x1 ? 1 : -1;
-  const sy = y0 < y1 ? 1 : -1;
-  let err = dx - dy;
-
-  while (true) {
-    if (maze.cells[y0] && maze.cells[y0][x0] === 'wall') {
-      return false;
-    }
-    if (x0 === x1 && y0 === y1) break;
-    const e2 = 2 * err;
-    if (e2 > -dy) {
-      err -= dy;
-      x0 += sx;
-    }
-    if (e2 < dx) {
-      err += dx;
-      y0 += sy;
     }
   }
-  return true;
-}
 
-// Game loop
-let lastTime = 0;
-function gameLoop(time) {
-  requestAnimationFrame(gameLoop);
-  if (isSingleplayer || isMultiplayer) {
-    const delta = (time - lastTime) / 1000;
-    lastTime = time;
-    const localId = isSingleplayer ? 'local' : socket.id;
-    const localPlayer = players[localId];
-    if (localPlayer && localPlayer.alive) {
-      localPlayer.update();
-      const endObj = maze.objects.find(o => o.type === 'end');
-      if (endObj && Math.hypot(localPlayer.x - (endObj.x + CELL_SIZE/2), localPlayer.y - (endObj.y + CELL_SIZE/2)) < CELL_SIZE) {
-        alert('You win!');
-        localPlayer.alive = false;
-      }
-      if (isMultiplayer) {
-        socket.emit('playerUpdate', {roomId, player: localPlayer});
-      }
-    }
-    drawMaze(playCtx);
-    drawPlayers(playCtx);
-  }
-}
-
-// AI build
-document.getElementById('ai-build').addEventListener('click', async () => {
-  const prompt = `Generate a futuristic 2D maze layout as valid JSON: {width:50, height:30, cells:2D array of null/"wall"/"spike", objects:[{type:"portal"/"door"/"key"/"trigger-zipline", x:number (grid*CELL_SIZE), y:number, scale:1, rotation:0, id:number, pairId:for portals, keyId:for doors/keys}], start:{x:0,y:0}, end:{x:49,y:29}}. Description: ${document.getElementById('ai-prompt').value || 'A sci-fi labyrinth with neon walls, portals, and traps'}`;
-  const API_KEY = 'AIzaSyBnfIO9jE0ZN-q2qnX1x6cN2zz7rIDRetE'; // Replace with actual key
-  try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${API_KEY}`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        contents: [{parts: [{text: prompt}]}]
-      })
-    });
-    if (!response.ok) throw new Error('API error');
-    const data = await response.json();
-    let aiMazeText = data.candidates[0].content.parts[0].text;
-    aiMazeText = aiMazeText.replace(/```json|```/g, '').trim(); // Clean up
-    const aiMaze = JSON.parse(aiMazeText);
-    maze = aiMaze;
-    initMaze();
-    maze.cells = aiMaze.cells || maze.cells;
-    updateCanvasSizes();
-    drawMaze(editorCtx);
-  } catch (error) {
-    console.error('AI error:', error);
-    alert('Failed to generate maze from AI. Check console.');
-  }
-});
-
-// Tool buttons
-document.querySelectorAll('#tools button[data-tool]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    currentTool = btn.dataset.tool;
+  const json = JSON.stringify(exportData, null, 2);
+  navigator.clipboard.writeText(json).then(() => {
+    alert("Maze JSON copied to clipboard!\nPaste it in the play mode 'Load Pasted JSON' area.");
+  }).catch(() => {
+    alert("Copy failed. Please manually copy:\n\n" + json);
   });
 });
 
-// Save/load
-document.getElementById('save-maze').addEventListener('click', () => {
-  localStorage.setItem('maze', JSON.stringify(maze));
-});
-document.getElementById('load-maze').addEventListener('click', () => {
-  const saved = localStorage.getItem('maze');
-  if (saved) {
-    maze = JSON.parse(saved);
-    initMaze();
-    maze.cells = maze.cells;
+function getToolColor(type) {
+  const map = {
+    wall: "#5dade2",
+    spike: "#ff00ff",
+    portal: "#9b59b6",
+    door: "#e67e22",
+    key: "#f1c40f",
+    start: "#27ae60",
+    end: "#e74c3c",
+    "trigger-zipline": "#8888ff"
+  };
+  return map[type] || "#ffffff";
+}
+
+// Load pasted JSON (compatible with Python editor format)
+document.getElementById('load-from-code').addEventListener('click', () => {
+  const text = document.getElementById('load-json').value.trim();
+  if (!text) return alert("Paste JSON first.");
+
+  try {
+    const data = JSON.parse(text);
+    maze.cells = Array.from({length: maze.height}, () => Array(maze.width).fill(null));
+    maze.objects = [];
+    maze.start = null;
+    maze.end = null;
+
+    Object.values(data).forEach(item => {
+      const gx = Math.floor(item.x / maze.gridSize);
+      const gy = Math.floor(item.y / maze.gridSize);
+
+      if (gx < 0 || gy < 0 || gx >= maze.width || gy >= maze.height) return;
+
+      if (item.type === 'wall' || item.type === 'spike') {
+        for (let dy = 0; dy < (item.h / maze.gridSize); dy++) {
+          for (let dx = 0; dx < (item.w / maze.gridSize); dx++) {
+            const cx = gx + dx;
+            const cy = gy + dy;
+            if (cx < maze.width && cy < maze.height) {
+              maze.cells[cy][cx] = item.type;
+            }
+          }
+        }
+      } else {
+        const obj = {
+          type: item.type,
+          x: item.x,
+          y: item.y,
+          scale: 1,
+          rotation: item.rot || 0,
+          id: Math.random().toString(36).slice(2)
+        };
+
+        if (item.linkId) {
+          if (item.type === 'portal') obj.pairId = item.linkId;
+          if (item.type === 'door' || item.type === 'key') obj.keyId = item.linkId;
+        }
+
+        if (item.type === 'start') maze.start = {x: gx, y: gy};
+        if (item.type === 'end')   maze.end   = {x: gx, y: gy};
+
+        maze.objects.push(obj);
+      }
+    });
+
     updateCanvasSizes();
-    drawMaze(editorCtx);
+    if (isEditor) {
+      drawMaze(editorCtx);
+    } else {
+      const pid = isSingleplayer ? 'local' : socket.id;
+      if (players[pid]) {
+        players[pid].x = (maze.start?.x || 2) * CELL_SIZE + CELL_SIZE / 2;
+        players[pid].y = (maze.start?.y || 2) * CELL_SIZE + CELL_SIZE / 2;
+        players[pid].alive = true;
+      }
+      drawMaze(playCtx);
+      drawPlayers(playCtx);
+    }
+
+    alert("Maze loaded from JSON!");
+  } catch (err) {
+    alert("Invalid JSON:\n" + err.message);
   }
 });
 
-// Mode buttons
+// Game loop
+function gameLoop() {
+  if (isSingleplayer || isMultiplayer) {
+    const localId = isSingleplayer ? 'local' : socket.id;
+    const p = players[localId];
+    if (p && p.alive) {
+      p.update();
+
+      if (maze.end) {
+        const ex = maze.end.x * CELL_SIZE + CELL_SIZE / 2;
+        const ey = maze.end.y * CELL_SIZE + CELL_SIZE / 2;
+        if (Math.hypot(p.x - ex, p.y - ey) < CELL_SIZE) {
+          alert("You win!");
+          p.alive = false;
+        }
+      }
+
+      if (isMultiplayer) {
+        socket.emit('playerUpdate', {roomId, player: p});
+      }
+    }
+
+    drawMaze(playCtx);
+    drawPlayers(playCtx);
+  }
+  requestAnimationFrame(gameLoop);
+}
+
+// Mode switching
 document.getElementById('editor-btn').addEventListener('click', () => {
   isEditor = true;
   document.getElementById('mode-selection').style.display = 'none';
@@ -475,10 +467,9 @@ document.getElementById('singleplayer-btn').addEventListener('click', () => {
   const saved = localStorage.getItem('maze');
   if (saved) maze = JSON.parse(saved);
   initMaze();
-  maze.cells = maze.cells;
   updateCanvasSizes();
-  players['local'] = new Player('local', maze.start.x * CELL_SIZE + CELL_SIZE/2, maze.start.y * CELL_SIZE + CELL_SIZE/2);
-  gameLoop(0);
+  players.local = new Player('local', (maze.start?.x || 2) * CELL_SIZE + CELL_SIZE/2, (maze.start?.y || 2) * CELL_SIZE + CELL_SIZE/2);
+  gameLoop();
 });
 
 document.getElementById('multiplayer-host-btn').addEventListener('click', () => {
@@ -488,23 +479,19 @@ document.getElementById('multiplayer-host-btn').addEventListener('click', () => 
   socket.emit('createRoom', maze);
 });
 
-socket.on('roomCreated', (id) => {
+socket.on('roomCreated', id => {
   roomId = id;
-  alert(`Room created: ${id}`);
+  alert(`Room ID: ${id}\nShare this with friends!`);
   startMultiplayer();
 });
 
 document.getElementById('multiplayer-join-btn').addEventListener('click', () => {
   document.getElementById('multiplayer-info').style.display = 'block';
-  document.getElementById('join-room').addEventListener('click', () => {
-    roomId = document.getElementById('room-id').value;
-    socket.emit('joinRoom', roomId);
-  }, {once: true});
 });
 
-socket.on('mazeData', (data) => {
-  maze = data;
-  startMultiplayer();
+document.getElementById('join-room').addEventListener('click', () => {
+  roomId = document.getElementById('room-id').value.trim();
+  if (roomId) socket.emit('joinRoom', roomId);
 });
 
 function startMultiplayer() {
@@ -513,32 +500,33 @@ function startMultiplayer() {
   document.getElementById('multiplayer-info').style.display = 'none';
   playCtx = playCanvas.getContext('2d');
   initMaze();
-  maze.cells = maze.cells;
   updateCanvasSizes();
-  players[socket.id] = new Player(socket.id, maze.start.x * CELL_SIZE + CELL_SIZE/2, maze.start.y * CELL_SIZE + CELL_SIZE/2);
-  gameLoop(0);
+  players[socket.id] = new Player(socket.id, (maze.start?.x || 2) * CELL_SIZE + CELL_SIZE/2, (maze.start?.y || 2) * CELL_SIZE + CELL_SIZE/2);
+  gameLoop();
 }
 
-socket.on('playersUpdate', (updatedPlayers) => {
-  players = {...updatedPlayers};
-  players[socket.id] = players[socket.id] || new Player(socket.id, maze.start.x * CELL_SIZE + CELL_SIZE/2, maze.start.y * CELL_SIZE + CELL_SIZE/2);
+socket.on('mazeData', data => {
+  maze = data;
+  startMultiplayer();
 });
 
-socket.on('objectsUpdate', (updatedObjects) => {
-  maze.objects = updatedObjects;
+socket.on('playersUpdate', updated => {
+  players = {...updated};
 });
 
-// Respawn on 'r'
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'r') {
-    const localPlayer = players[isSingleplayer ? 'local' : socket.id];
-    if (localPlayer && !localPlayer.alive) {
-      localPlayer.alive = true;
-      localPlayer.x = maze.start.x * CELL_SIZE + CELL_SIZE/2;
-      localPlayer.y = maze.start.y * CELL_SIZE + CELL_SIZE/2;
-      localPlayer.vx = 0;
-      localPlayer.vy = 0;
-      localPlayer.inventory.clear();
+socket.on('objectsUpdate', objs => {
+  maze.objects = objs;
+});
+
+// Respawn
+document.addEventListener('keydown', e => {
+  if (e.key.toLowerCase() === 'r') {
+    const p = players[isSingleplayer ? 'local' : socket.id];
+    if (p && !p.alive) {
+      p.alive = true;
+      p.x = (maze.start?.x || 2) * CELL_SIZE + CELL_SIZE/2;
+      p.y = (maze.start?.y || 2) * CELL_SIZE + CELL_SIZE/2;
+      p.inventory.clear();
     }
   }
 });
