@@ -18,7 +18,8 @@ io.on('connection', (socket) => {
     const roomId = Math.random().toString(36).substring(7);
     rooms[roomId] = {
       maze: mazeData,
-      players: {}
+      players: {},
+      objects: mazeData.objects // Sync objects
     };
     socket.join(roomId);
     socket.emit('roomCreated', roomId);
@@ -28,8 +29,8 @@ io.on('connection', (socket) => {
     if (rooms[roomId]) {
       socket.join(roomId);
       socket.emit('mazeData', rooms[roomId].maze);
-      // Send current players
       io.to(roomId).emit('playersUpdate', rooms[roomId].players);
+      socket.emit('objectsUpdate', rooms[roomId].maze.objects);
     } else {
       socket.emit('error', 'Room not found');
     }
@@ -40,6 +41,14 @@ io.on('connection', (socket) => {
     if (rooms[roomId]) {
       rooms[roomId].players[socket.id] = data.player;
       io.to(roomId).emit('playersUpdate', rooms[roomId].players);
+    }
+  });
+
+  socket.on('objectUpdate', (data) => {
+    const roomId = data.roomId;
+    if (rooms[roomId]) {
+      rooms[roomId].maze.objects = data.objects;
+      io.to(roomId).emit('objectsUpdate', rooms[roomId].maze.objects);
     }
   });
 
