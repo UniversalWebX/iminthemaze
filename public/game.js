@@ -473,7 +473,7 @@ function gameLoop(time) {
 document.getElementById('ai-build').addEventListener('click', async () => {
   const prompt = document.getElementById('ai-prompt').value || 'Generate a maze as JSON: {width:50, height:30, cells:2D array of null/"wall"/"spike", objects:[{type:"portal"/"door"/"key"/"trigger-person"/etc, x:int*CELL_SIZE, y:int*CELL_SIZE, scale:1, rotation:0, id:?, pairId:for portals, keyId:for doors/keys}], start:{x:0,y:0}, end:{x:49,y:29}}';
   // Replace with your API key
-  const API_KEY = 'YOUR_GEMINI_API_KEY';
+  const API_KEY = 'AIzaSyBnfIO9jE0ZN-q2qnX1x6cN2zz7rIDRetE';
   try {
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${API_KEY}`, {
       method: 'POST',
