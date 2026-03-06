@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Futuristic Maze Game</title>
+  <title>im in the maze</title>
   <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
   <div id="mode-selection">
@@ -13,6 +14,7 @@
     <button id="multiplayer-host-btn">Host Multiplayer</button>
     <button id="multiplayer-join-btn">Join Multiplayer</button>
   </div>
+
   <div id="editor" style="display:none;">
     <canvas id="editor-canvas"></canvas>
     <div id="tools">
@@ -29,18 +31,25 @@
       <button data-tool="rotate">Rotate</button>
       <button id="resize-maze">Resize Maze</button>
       <button id="ai-build">Ask AI to Build Maze</button>
-      <button id="save-maze">Save Maze</button>
-      <button id="load-maze">Load Maze</button>
+      <button id="save-maze">Save Maze (JSON)</button>
+      <button id="load-maze">Load from LocalStorage</button>
     </div>
     <input id="ai-prompt" placeholder="Describe maze for AI (e.g., futuristic sci-fi labyrinth)">
   </div>
+
   <div id="play" style="display:none;">
     <canvas id="play-canvas"></canvas>
-    <div id="multiplayer-info" style="display:none;">
-      <input id="room-id" placeholder="Room ID">
-      <button id="join-room">Join</button>
+    <div id="load-container" style="text-align:center; margin:20px; color:#00ffcc; font-family:'Orbitron',sans-serif;">
+      <h3 style="margin-bottom:10px;">Load Maze from Code</h3>
+      <textarea id="load-json" placeholder="Paste the JSON code from the Python editor or Save Maze here..." rows="8" style="width:90%; max-width:800px; background:rgba(0,0,0,0.6); border:1px solid #00ffcc; color:#00ffcc; padding:12px; font-family:monospace; border-radius:6px;"></textarea><br><br>
+      <button id="load-from-code" style="padding:12px 30px; font-size:16px;">Load Pasted JSON</button>
+    </div>
+    <div id="multiplayer-info" style="display:none; text-align:center; margin:20px;">
+      <input id="room-id" placeholder="Room ID" style="padding:10px; width:200px;">
+      <button id="join-room" style="padding:10px 20px;">Join</button>
     </div>
   </div>
+
   <script src="/socket.io/socket.io.js"></script>
   <script src="game.js"></script>
 </body>
